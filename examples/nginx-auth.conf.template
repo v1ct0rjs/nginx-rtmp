@@ -71,8 +71,7 @@ http {
 
         # Publish key check. Only nginx itself (127.0.0.1) may call it.
         location = /auth_publish {
-            allow 127.0.0.1;
-            deny all;
+            if ($remote_addr != "127.0.0.1") { return 403; }
             if ($arg_key = "CHANGE_ME_SECRET") { return 204; }
             return 403;
         }
