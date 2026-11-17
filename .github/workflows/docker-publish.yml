@@ -1,0 +1,76 @@
+name: Build, test and publish
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Cada lunes a las 04:23 UTC: reconstruye para recoger parches de Alpine y nginx.
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/nginx-rtmp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build test image (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          pull: true
+          no-cache: true
+          tags: nginx-rtmp:test
+
+      - name: Smoke test (OBS-like RTMP stream -> HLS)
+        run: |
+          docker run -d --name rtmp -p 1935:1935 -p 8080:80 nginx-rtmp:test
+          for i in $(seq 1 20); do curl -sf -o /dev/null http://127.0.0.1:8080/stat && break; sleep 1; done
+          curl -sf -o /dev/null http://127.0.0.1:8080/stat
+          curl -sf -o /dev/null http://127.0.0.1:8080/stat.xsl
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+          ffmpeg -nostdin -loglevel error -re \
+            -f lavfi -i testsrc=size=640x360:rate=30 -f lavfi -i sine=frequency=440 \
+            -c:v libx264 -preset veryfast -g 120 -bf 0 -c:a aac -t 20 \
+            -f flv rtmp://127.0.0.1:1935/stream/test &
+
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8080/live/test/index.m3u8 && break; sleep 1; done
+          curl -sf http://127.0.0.1:8080/live/test/index.m3u8 | tee /dev/stderr | grep -q EXTINF
+          wait
+
+          echo "NGINX_VERSION=$(docker run --rm --entrypoint nginx nginx-rtmp:test -v 2>&1 | sed 's|.*nginx/||')" >> "$GITHUB_ENV"
+          echo "BUILD_DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+
+      - name: Container logs
+        if: always()
+        run: docker logs rtmp 2>&1 | tail -40 || true
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (amd64 + arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          no-cache: true
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ env.NGINX_VERSION }}
+            ${{ env.IMAGE }}:${{ env.NGINX_VERSION }}-${{ env.BUILD_DATE }}
