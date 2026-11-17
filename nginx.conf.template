@@ -13,7 +13,7 @@ rtmp {
         application stream {
             live on;
 
-            # Sin FFmpeg: HLS directo desde el stream de OBS
+            # No FFmpeg: HLS is cut straight from the OBS stream
             hls on;
             hls_path /opt/data/hls;
             hls_fragment 4;

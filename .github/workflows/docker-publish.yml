@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   schedule:
-    # Cada lunes a las 04:23 UTC: reconstruye para recoger parches de Alpine y nginx.
+    # Every Monday at 04:23 UTC: rebuild to pick up Alpine and nginx patches.
     - cron: "23 4 * * 1"
   workflow_dispatch:
 
@@ -52,9 +52,36 @@ jobs:
           echo "NGINX_VERSION=$(docker run --rm --entrypoint nginx nginx-rtmp:test -v 2>&1 | sed 's|.*nginx/||')" >> "$GITHUB_ENV"
           echo "BUILD_DATE=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
 
+      - name: Publish key test (examples/nginx-auth.conf.template)
+        run: |
+          sed 's/CHANGE_ME_SECRET/ci-secret/' examples/nginx-auth.conf.template > /tmp/auth.conf.template
+          docker run -d --name rtmp-auth -p 1936:1935 -p 8081:80 \
+            -v /tmp/auth.conf.template:/etc/nginx/nginx.conf.template:ro nginx-rtmp:test
+          for i in $(seq 1 20); do curl -sf -o /dev/null http://127.0.0.1:8081/stat && break; sleep 1; done
+
+          # Publishing without the key must be rejected.
+          if ffmpeg -nostdin -loglevel error -re -f lavfi -i testsrc=size=320x180:rate=30 \
+               -c:v libx264 -preset veryfast -g 120 -bf 0 -t 3 \
+               -f flv rtmp://127.0.0.1:1936/stream/test; then
+            echo "Publishing without the key was accepted"; exit 1
+          fi
+
+          # The key check endpoint must not be reachable from outside the container.
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://127.0.0.1:8081/auth_publish?key=ci-secret')" = 403
+
+          # Publishing with the key must produce HLS.
+          ffmpeg -nostdin -loglevel error -re -f lavfi -i testsrc=size=640x360:rate=30 \
+            -c:v libx264 -preset veryfast -g 120 -bf 0 -t 20 \
+            -f flv "rtmp://127.0.0.1:1936/stream/test?key=ci-secret" &
+          for i in $(seq 1 30); do curl -sf -o /dev/null http://127.0.0.1:8081/live/test/index.m3u8 && break; sleep 1; done
+          curl -sf http://127.0.0.1:8081/live/test/index.m3u8 | grep -q EXTINF
+          wait
+
       - name: Container logs
         if: always()
-        run: docker logs rtmp 2>&1 | tail -40 || true
+        run: |
+          docker logs rtmp 2>&1 | tail -40 || true
+          docker logs rtmp-auth 2>&1 | tail -40 || true
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3

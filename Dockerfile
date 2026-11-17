@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 #
-# Servidor RTMP -> HLS sin recodificar (OBS -> HLS).
-# nginx + nginx-rtmp-module usando los paquetes oficiales de Alpine:
-# no se compila nada y cada reconstrucción recoge los parches de seguridad.
+# RTMP -> HLS server without transcoding (OBS -> HLS).
+# nginx + nginx-rtmp-module from the official Alpine packages: nothing is
+# compiled, and every rebuild picks up the latest security patches.
 #
-# Compatible con alfg/nginx-rtmp: mismas rutas, mismas variables
-# (RTMP_PORT, HTTP_PORT) y la misma plantilla /etc/nginx/nginx.conf.template.
+# Drop-in replacement for alfg/nginx-rtmp: same paths, same variables
+# (RTMP_PORT, HTTP_PORT) and the same /etc/nginx/nginx.conf.template.
 
 FROM alpine:3.24
 
 LABEL org.opencontainers.image.title="nginx-rtmp" \
-      org.opencontainers.image.description="RTMP -> HLS sin recodificar: nginx + nginx-rtmp-module (paquetes oficiales de Alpine)" \
+      org.opencontainers.image.description="RTMP to HLS without transcoding: nginx + nginx-rtmp-module (official Alpine packages)" \
       org.opencontainers.image.source="https://github.com/v1ct0rjs/nginx-rtmp" \
       org.opencontainers.image.licenses="BSD-2-Clause"
 
@@ -31,7 +31,7 @@ ENV RTMP_PORT=1935 \
 EXPOSE 1935 80
 STOPSIGNAL SIGQUIT
 
-# Comprueba que el puerto RTMP acepta conexiones (sin llenar el log de accesos HTTP).
+# Checks that the RTMP port accepts connections (without filling the HTTP access log).
 HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
   CMD nc -z 127.0.0.1 "${RTMP_PORT}" || exit 1
 

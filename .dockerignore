@@ -2,3 +2,10 @@
 .github
 README.md
 *.patch
+docker-compose.yml
+examples
+docker-compose.override.yml
+my-nginx.conf.template
+www
+.env
+.gitignore

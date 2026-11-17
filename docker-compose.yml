@@ -1,0 +1,17 @@
+# Quick start: docker compose up -d --build
+#
+# Keep your own settings (config, web pages, ports) in
+# docker-compose.override.yml, which git ignores, so "git pull" never
+# conflicts with your changes. See the README.
+services:
+  nginx-rtmp:
+    build: .
+    image: nginx-rtmp:local
+    container_name: nginx_rtmp
+    restart: unless-stopped
+    ports:
+      - "1935:1935"   # RTMP (OBS)
+      - "8080:80"     # HTTP (HLS and /stat)
+    environment:
+      - RTMP_PORT=1935
+      - HTTP_PORT=80

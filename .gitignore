@@ -1,0 +1,5 @@
+# Local settings: never committed (they may contain your publish secret).
+docker-compose.override.yml
+my-nginx.conf.template
+/www/
+.env

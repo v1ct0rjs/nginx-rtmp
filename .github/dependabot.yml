@@ -1,12 +1,12 @@
 version: 2
 updates:
-  # Avisa cuando salga una versión nueva de Alpine (FROM alpine:3.xx).
+  # Opens a pull request when a new Alpine release is out (FROM alpine:3.xx).
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
       interval: "weekly"
 
-  # Mantiene al día las acciones de GitHub del workflow.
+  # Keeps the GitHub Actions used by the workflow up to date.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
